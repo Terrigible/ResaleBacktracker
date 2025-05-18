@@ -175,22 +175,21 @@ if bank_bal and bank_bal_inc and cpf_bal and cpf_bal_inc and current_age>0:
         (df['town'].isin(selected_town))
         ]
 
-    # Make sure 'year' column exists
-    filtered_df['year'] = pd.to_datetime(filtered_df['month']).dt.year  # if 'month' column is YYYY-MM
-    # Create the pivot table
-    pivot = pd.pivot_table(
-        filtered_df,
-        values='resale_price',   # change this to your column to average
-        index='year',            # rows
-        columns='town',          # columns
-        aggfunc='mean'           # aggregation function
-    )
-    pivot.index.name = 'Year'
-    # Optional: round values
-    pivot = pivot.round(2)
-    # Show in Streamlit
-    # st.text('Average Resale Price by Year and Town')
-    # st.dataframe(pivot)
+    @st.cache_data
+    def generate_pivot(filtered_df):
+        filtered_df = filtered_df.copy()
+        filtered_df['year'] = pd.to_datetime(filtered_df['month']).dt.year
+        pivot = pd.pivot_table(
+            filtered_df,
+            values='resale_price',
+            index='year',
+            columns='town',
+            aggfunc='mean'
+        )
+        pivot.index.name = 'Year'
+        return pivot.round(2)
+
+    pivot = generate_pivot(filtered_df)
 
     # Another df to show projection
     future_years = list(range(datetime.now().year,buying_year+1))
