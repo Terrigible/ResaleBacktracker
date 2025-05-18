@@ -32,21 +32,11 @@ def download_datasets():
         response = response.content.decode('utf-8')
         temp_df = pd.read_csv(StringIO(response))
         temp_dfs.append(temp_df)
-    return(pd.concat(temp_dfs, ignore_index=True))
-
-# Clean up data
-def clean_up_data():
-    # date, to use recognizable date format
-    # df['month'] = pd.to_datetime(df['month'], format='%Y-%m')
-    # storey range, to split to upper and lower limit
-    # df[['storey_from', 'storey_to']] = df['storey_range'].str.extract(r'(\d+)\s+TO\s+(\d+)').astype('Int64')
-    # df.drop(columns='storey_range', inplace=True)
-    # remaining lease, to base it on current date and 'lease_commence_date' column
-    # df['remaining_lease'] = 99-(datetime.today().year-df['lease_commence_date'])
-    # rename multi-gen to be consistent
-    df['flat_type'] = df['flat_type'].str.replace('MULTI GENERATION', 'MULTI-GENERATION', case=False, regex=True)
+    return_df = pd.concat(temp_dfs, ignore_index=True)
+    return_df['flat_type'] = return_df['flat_type'].str.replace('MULTI GENERATION', 'MULTI-GENERATION', case=False, regex=True)
     columns_to_remove = ['block', 'street_name', 'storey_range', 'floor_area_sqm', 'flat_model', 'lease_commence_date', 'remaining_lease']
-    df = df.drop(columns=columns_to_remove)
+    return_df = return_df.drop(columns=columns_to_remove)
+    return(return_df)
 
 # Months diff
 def months_diff(future_year, future_month):
@@ -56,11 +46,8 @@ def months_diff(future_year, future_month):
     total_months = year_diff * 12 + month_diff
     return total_months
 
-
-    
 # Main function here
 df = download_datasets()
-clean_up_data()
 
 # Form inputs below
 ################################################################################################
