@@ -39,12 +39,14 @@ def clean_up_data():
     # date, to use recognizable date format
     # df['month'] = pd.to_datetime(df['month'], format='%Y-%m')
     # storey range, to split to upper and lower limit
-    df[['storey_from', 'storey_to']] = df['storey_range'].str.extract(r'(\d+)\s+TO\s+(\d+)').astype('Int64')
-    df.drop(columns='storey_range', inplace=True)
+    # df[['storey_from', 'storey_to']] = df['storey_range'].str.extract(r'(\d+)\s+TO\s+(\d+)').astype('Int64')
+    # df.drop(columns='storey_range', inplace=True)
     # remaining lease, to base it on current date and 'lease_commence_date' column
-    df['remaining_lease'] = 99-(datetime.today().year-df['lease_commence_date'])
+    # df['remaining_lease'] = 99-(datetime.today().year-df['lease_commence_date'])
     # rename multi-gen to be consistent
     df['flat_type'] = df['flat_type'].str.replace('MULTI GENERATION', 'MULTI-GENERATION', case=False, regex=True)
+    columns_to_remove = ['block', 'street_name', 'storey_range', 'floor_area_sqm', 'flat_model', 'lease_commence_date', 'remaining_lease']
+    df = df.drop(columns=columns_to_remove)
 
 # Months diff
 def months_diff(future_year, future_month):
