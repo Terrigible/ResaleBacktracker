@@ -141,7 +141,7 @@ if bank_bal and bank_bal_inc and cpf_bal and cpf_bal_inc and current_age>0:
     col1, col2 = st.columns([4, 1])
     col3, col4 = st.columns([4, 1])
     bank_usage = col1.slider("I would like to use this much from my bank balance", 0.0, proj_df.loc[proj_df.index[-1], 'Bank Balance'],step=1000.0)
-    cpf_usage = col3.slider("I would like to use this much from my CPF(OA) balance (%)", 0.0, proj_df.loc[proj_df.index[-1], 'CPF(OA) Balance'],step=1000.0)
+    cpf_usage = col3.slider("I would like to use this much from my CPF(OA) balance", 0.0, proj_df.loc[proj_df.index[-1], 'CPF(OA) Balance'],step=1000.0)
     col2.markdown(f"**Bank Balance:**  \n${proj_df.loc[proj_df.index[-1], 'Bank Balance'] - bank_usage:,.2f}")
     col4.markdown(f"**CPF(OA) Balance:**  \n${proj_df.loc[proj_df.index[-1], 'CPF(OA) Balance'] - cpf_usage:,.2f}")
     downpayment_percentage = st.number_input("I am making downpayment of __% property value", value=25)
@@ -155,10 +155,9 @@ if bank_bal and bank_bal_inc and cpf_bal and cpf_bal_inc and current_age>0:
     st.write("### HDB Filters")
     flat_types = sorted(df['flat_type'].unique())
     selected_flat_type = st.selectbox("Desired Flat Type", options=flat_types, index=2)
-    appreciation_period = st.number_input("Appreciate based on past __ years", value=5)
 
     towns = sorted(df['town'].unique())
-    selected_town = st.pills("Desired Towns", options=towns, selection_mode="multi")
+    selected_town = st.pills("Desired Towns (click to select)", options=towns, selection_mode="multi")
     filtered_df = df[
         (df['flat_type']==selected_flat_type) &
         (df['town'].isin(selected_town))
@@ -185,21 +184,24 @@ if bank_bal and bank_bal_inc and cpf_bal and cpf_bal_inc and current_age>0:
 
     # Appreciation df
     if selected_town:
-        st.text('Average Appreciation by Year and Town')
-        average_appreciation_df = pivot.tail(appreciation_period+1).copy()
+        st.text('Average Annual Appreciation Over Last __ Years by Town (For Reference)')
+        average_appreciation_df = pivot.tail(16).copy()
         for col in average_appreciation_df.columns:
             for row in reversed(average_appreciation_df.index[1:]):
                 i = average_appreciation_df.index.get_loc(row)
                 prev_row = average_appreciation_df.index[i - 1]
                 value = average_appreciation_df.loc[row, col] / average_appreciation_df.loc[prev_row, col]
                 average_appreciation_df.loc[row, col] = average_appreciation_df.loc[row, col] / average_appreciation_df.loc[prev_row, col]
-        average_appreciation_df = average_appreciation_df.drop(average_appreciation_df.index[0])
-        average_row = average_appreciation_df.mean(numeric_only=True)  # calculates average for numeric columns only
-        average_row.name = 'Appreciation'
-        average_appreciation_df = pd.concat([average_appreciation_df, average_row.to_frame().T])
-        average_appreciation_df.index.name = 'Year'
-        appreciation_df = average_appreciation_df.tail(1)
-        st.dataframe(appreciation_df)
+        average_appreciation_df = average_appreciation_df.drop(average_appreciation_df.index[0]) # Remove first row, as it is not an inflation rate
+        # Appreciation rate over past years
+        past_appreciation_df = pivot.tail(1).copy()
+        past_appreciation_df = past_appreciation_df.drop(past_appreciation_df.index[0])
+        for last_n in [1,3,5,10,15]:
+            average_row = (average_appreciation_df.tail(last_n).mean(numeric_only=True) - 1) * 100  # calculates average for numeric columns only
+            past_appreciation_df.loc[f'{last_n} Years'] = average_row
+        past_appreciation_df.index.name = 'Appreciation Over Last'
+        st.dataframe(past_appreciation_df)
+        appreciation_rate = st.selectbox("Use Property Inflation Rate of Last __ Years",past_appreciation_df.index)
 
 
         # Future df
@@ -211,7 +213,7 @@ if bank_bal and bank_bal_inc and cpf_bal and cpf_bal_inc and current_age>0:
             for idx in future_df.index[1:]:
                 i = future_df.index.get_loc(idx)
                 prev_row = future_df.index[i - 1]
-                value = future_df.loc[prev_row, col] * average_appreciation_df.loc[average_appreciation_df.index[-1],col]
+                value = future_df.loc[prev_row, col]*(1+past_appreciation_df.loc[appreciation_rate,col]/100)
                 future_df.loc[idx, col] = value
         future_df = future_df.round(2)
         future_df = future_df.iloc[1:]
