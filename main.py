@@ -268,11 +268,13 @@ if selected_town:
             future_df.loc[idx, col] = value
     future_df = future_df.round(2)
     future_df = future_df.iloc[1:]
-    # st.dataframe(future_df.style.format("{:.2f}"))
-
     combined_df = pd.concat([pivot,future_df])
     styled_df = combined_df.style.format("{:.2f}")
-    st.dataframe(styled_df)
+    show_past = st.toggle("Show previous years")
+    if show_past:
+        st.dataframe(styled_df)
+    else:
+        st.dataframe(future_df)
 
     def highlight_negative_row(row):
         if row['Balance (of initial Bank+OA)'] < 0:
