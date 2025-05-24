@@ -48,23 +48,23 @@ def months_diff(future_year, future_month):
     total_months = year_diff * 12 + month_diff
     return total_months
 
-def calc_cpf_oa_increase(age):
-    if age <= 35:
-        return 0.6217
-    elif age <= 45: 
-        return 0.5677
-    elif age <= 50:
-        return 0.5136
-    elif age <= 55:
-        return 0.4055
-    elif age <= 60:
-        return 0.3694
-    elif age <= 65:
-        return 0.149
-    elif age <= 70:
-        return 0.0607
-    else:
-        return 0.08
+def calc_cpf_oa_increase(salary, year, age):
+    portion_to_oa = 0
+    cap = 0
+    
+    if      year == 2025:   cap = 7400
+    else:                   cap = 8000
+    
+    if      age <= 35:      portion_to_oa = 0.6217
+    elif    age <= 45:      portion_to_oa =  0.5677
+    elif    age <= 50:      portion_to_oa =  0.5136
+    elif    age <= 55:      portion_to_oa =  0.4055
+    elif    age <= 60:      portion_to_oa =  0.3694
+    elif    age <= 65:      portion_to_oa =  0.149
+    elif    age <= 70:      portion_to_oa =  0.0607
+    else:                   portion_to_oa =  0.08
+    
+    return min(salary,cap)*0.37*portion_to_oa
 
 # Main function here
 hdb_df = download_resale_hdb_dataset()
@@ -111,13 +111,13 @@ cpf_bal = st.number_input("Current CPF(O/A) Balance")
 st.subheader(f"Your Projection")
 
 if bank_bal and bank_bal_inc and cpf_bal and age>0:
-    cpf_bal_inc = salary*0.37*calc_cpf_oa_increase(age)
+    cpf_bal_inc = calc_cpf_oa_increase(salary,today.year,age)
     columns = [
         'Salary',
         'Bank Increase',
         'Bank Interest',
         'Bank Balance',
-        'CPF Increase',
+        'CPF(OA) Increase',
         'CPF(OA) Interest',
         'CPF(OA) Balance',
         'Total balance'
@@ -127,7 +127,7 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
         'Bank Increase': bank_bal_inc,
         'Bank Interest': 0,
         'Bank Balance': bank_bal,
-        'CPF Increase': cpf_bal_inc,
+        'CPF(OA) Increase': cpf_bal_inc,
         'CPF(OA) Interest': 0,
         'CPF(OA) Balance': cpf_bal,
         'Total balance': 0
@@ -140,19 +140,17 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
         # Age
         if next_date.month == birthday.month:
             age += 1
-            cpf_bal_inc = salary*0.37*calc_cpf_oa_increase(age)
-            next_row['CPF Increase']=cpf_bal_inc
         ## Count Bank Balance
         # Annual increment month
         if next_date.month == datetime.strptime(sal_raise_month, "%B").month:
             salary += salary_raise/100*salary
             bank_bal_inc += salary_raise/100*bank_bal_inc
-            cpf_bal_inc += salary_raise/100*cpf_bal_inc
             next_row['Salary']=salary
             next_row['Bank Increase']=bank_bal_inc
-            next_row['CPF Increase']=cpf_bal_inc
         next_row['Bank Interest']=next_row['Bank Balance']*bank_annual_interest/12/100
         next_row['Bank Balance']=next_row['Bank Balance']+next_row['Bank Interest']+bank_bal_inc
+        cpf_bal_inc = calc_cpf_oa_increase(salary,next_date.year,age)
+        next_row['CPF(OA) Increase']=cpf_bal_inc
         ## Count CPF Balance
         if next_date.month == 1:
             for interest in pending_cpf:
@@ -160,7 +158,7 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
             pending_cpf = []
         next_row['CPF(OA) Interest']=next_row['CPF(OA) Balance']*2.5/12/100
         pending_cpf.append(next_row['CPF(OA) Interest'])
-        next_row['CPF(OA) Balance'] += next_row['CPF Increase']
+        next_row['CPF(OA) Balance'] += next_row['CPF(OA) Increase']
         # Add row
         next_row['Total balance']=next_row['Bank Balance']+next_row['CPF(OA) Balance']
         next_row_pd = pd.DataFrame([next_row],index=[next_date.strftime("%Y-%m")])
@@ -195,7 +193,7 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
     if bank_usage>0 or cpf_usage>0:
         st.info("Note that there are other upfront payments beyond the downpayment, and to maintain enough savings / emergency funds. ")
 else:
-    st.info("Please fill up all 'Timeline' and 'Cashflow' fields for your Downpayment options to be available. ")
+    st.info("Please fill up all 'Timeline' and 'Cashflow' fields for your downpayment options to be available. ")
 st.divider()
 # Filters for options
 st.subheader("HDB Projection")
