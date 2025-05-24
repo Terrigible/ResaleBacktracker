@@ -136,8 +136,7 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
     current_date = datetime.today()
     next_date = current_date + relativedelta(months=1)
     pending_cpf = []
-    for row in range(0,months_diff(future_birthday.year,future_birthday.month)-1):
-        next_date += relativedelta(months=1)
+    for row in range(0,months_diff(future_birthday.year,future_birthday.month)):
         # Age
         if next_date.month == birthday.month:
             age += 1
@@ -166,6 +165,7 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
         next_row['Total balance']=next_row['Bank Balance']+next_row['CPF(OA) Balance']
         next_row_pd = pd.DataFrame([next_row],index=[next_date.strftime("%Y-%m")])
         proj_df = pd.concat([proj_df, next_row_pd])
+        next_date += relativedelta(months=1)
     # Create an empty DataFrame with the specified columns
     proj_df.index.name = 'Year/Month'
     proj_df = proj_df.round(2)
