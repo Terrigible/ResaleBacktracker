@@ -103,7 +103,7 @@ sal_col1, sal_col2, sal_col3 = st.columns(3)
 with sal_col1:
     salary = st.number_input("Current Salary (per month)")
 with sal_col2:
-    salary_raise = st.number_input("Expected Salary Increase per Year (%)")
+    salary_raise = st.number_input("Expected Salary Increase per Year (%)", value=3.0)
 with sal_col3:
     sal_raise_month = st.selectbox("Annual Raise Month", months)
 cpf_bal = st.number_input("Current CPF(O/A) Balance")
