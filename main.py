@@ -300,8 +300,8 @@ if selected_town:
             value = future_df.loc[prev_row, col]*(1+past_appreciation_df.loc[appreciation_rate,col]/100)
             future_df.loc[idx, col] = value
     future_df = future_df.round(2)
-    future_df = future_df.iloc[1:]
-    combined_df = pd.concat([pivot,future_df])
+    # future_df = future_df.iloc[1:]
+    combined_df = pd.concat([pivot,future_df.iloc[1:]])
     styled_df = combined_df.style.format("{:.2f}")
     show_past = st.toggle("Show previous years")
     if show_past:
