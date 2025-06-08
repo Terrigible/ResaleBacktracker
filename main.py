@@ -228,7 +228,7 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
     if bank_usage>0 or cpf_usage>0:
         st.info("Note that there are other upfront payments beyond the downpayment, and to maintain enough savings / emergency funds. ")
 else:
-    st.info("Please fill up all 'Timeline' and 'Cashflow' fields for your downpayment options to be available. ")
+    st.info("Please fill up all 'Timeline' and 'Cashflow' fields for your downpayment and loan options to be available. ")
 st.divider()
 # Filters for options
 st.subheader("HDB Projection")
