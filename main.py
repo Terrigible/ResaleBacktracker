@@ -87,14 +87,14 @@ st.divider()
 st.subheader("Timeline")
 age_col1, age_col2 = st.columns(2)
 with age_col1:
-    birthday = st.date_input("Birthday",min_value=date(today.year-99, 1, 1),
-    max_value=date(today.year+99, 12, 31))
+    birthday = st.date_input("Birthday",value=date(today.year-35, today.month, today.day),min_value=date(today.year-99, 1, 1),
+    max_value=today)
 with age_col2:
     age = today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
     st.text_input("Current Age", value=age, disabled=True)
 target_col1, target_col2= st.columns(2)
 with target_col1:
-    buying_age = st.number_input("Buying Age", value=35)
+    buying_age = st.number_input("Buying Age", value=35, min_value=age)
 with target_col2:
     future_birthday = birthday + relativedelta(years=buying_age)
     buy_date = st.text_input("Buying Date", value=(f'{calendar.month_name[future_birthday.month]} {future_birthday.year}'), disabled=True)
@@ -146,11 +146,11 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
     }
     proj_df = pd.DataFrame(columns=columns)
     current_date = datetime.today()
-    next_date = current_date + relativedelta(months=1)
+    next_date = current_date
     pending_cpf = []
-    for row in range(0,months_diff(future_birthday.year,future_birthday.month)):
+    for row in range(0,months_diff(future_birthday.year,future_birthday.month)+1):
         # Age
-        if next_date.month == birthday.month:
+        if next_date.year > today.year and next_date.month == birthday.month:
             age += 1
         ## Count Bank Balance
         # Annual increment month
@@ -203,7 +203,7 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
     with pay_col2: 
         loan_duration = st.number_input("Loan Duration in Years", value=25)
     with pay_col3:
-        loan_interest = st.number_input("Loan Interest Rate", value=2.5,step=0.01, format="%.2f")
+        loan_interest = st.number_input("Loan Interest Rate", value=3.00,step=0.01, format="%.2f")
     loan = calc_loan_based_on_msr_salary(loan_repayment_val, loan_interest, loan_duration)
     st.info(f"You can loan an estimated amount of ${loan:,.2f}. ")
     expected_grants = st.number_input("Expected Grant(s) of $__", value=40000, step=1000)
