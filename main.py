@@ -345,6 +345,6 @@ if selected_town:
         # Round numeric columns to 2 decimals *in the data itself*
         rounded_df = sorted_df.copy()
         numeric_cols = rounded_df.select_dtypes(include=["number"]).columns
-        rounded_df[numeric_cols] = rounded_df[numeric_cols].round(1)
+        rounded_df[numeric_cols] = rounded_df[numeric_cols].round(2)
         st.dataframe(rounded_df)
         st.warning("Complete the sections 'Your Projection' and 'Downpayment & Loan' sections to see cash balance after the initial budget.")
