@@ -20,6 +20,7 @@ datasets = [ # These datasets are from 'Resale Flat Prices' https://data.gov.sg/
 ]
 months = list(calendar.month_name)[1:]
 today = datetime.today()
+msr = 0.3
 
 # Download datasets
 @st.cache_data
@@ -66,6 +67,12 @@ def calc_cpf_oa_increase(salary, year, age):
     
     return min(salary,cap)*0.37*portion_to_oa
 
+def calc_loan_based_on_msr_salary(payment, interest, years):
+    interest = interest/100/12
+    total_payments = years*12
+    loan = payment * (1-(1+interest)**(-total_payments)) / interest
+    return loan
+
 # Main function here
 hdb_df = download_resale_hdb_dataset()
 
@@ -92,21 +99,26 @@ with target_col2:
     future_birthday = birthday + relativedelta(years=buying_age)
     buy_date = st.text_input("Buying Date", value=(f'{calendar.month_name[future_birthday.month]} {future_birthday.year}'), disabled=True)
 st.subheader("Cashflow")
-bank_col1, bank_col2, bank_col3 = st.columns(3)
+bank_col1, bank_col2 = st.columns(2)
 with bank_col1:
-    bank_bal = st.number_input("Bank Balance")
+    bank_bal = st.number_input("Bank Balance ($)",step=100)
 with bank_col2:
-    bank_bal_inc = st.number_input("Bank Savings (per month)")
-with bank_col3:
-    bank_annual_interest = st.number_input("Bank Interest Rate (%)", value=2.5,step=0.01, format="%.2f")
+    bank_bal_inc = st.number_input("Bank Savings per Month ($)",step=100)
+bank_int_col1, bank_int_col2, bank_int_col3 = st.columns(3)
+with bank_int_col1:
+    bank_base_interest = st.number_input("Bank Base Interest Rate (%)", value=0.05,step=0.01, format="%.2f", help="This interest is usually applied to your entire Bank Balance.")
+with bank_int_col2:
+    bank_bonus_interest = st.number_input("Bank Bonus Interest Rate (%)", value=2.5,step=0.01, format="%.2f", help="This interest is usually applied to a certain amount of your Bank Balance (e.g. first $100,000).")
+with bank_int_col3:
+    bank_bonus_interest_cap = st.number_input("Bank Bonus Interest Balance Cap ($)", value=100000,step=1000)
 sal_col1, sal_col2, sal_col3 = st.columns(3)
 with sal_col1:
-    salary = st.number_input("Current Salary (per month)")
+    salary = st.number_input("Current Salary per Month ($)",step=100, help="Salary before CPF deduction.")
 with sal_col2:
-    salary_raise = st.number_input("Expected Salary Increase per Year (%)", value=3.0)
+    salary_raise = st.number_input("Salary Increase per Year (%)", value=3.0)
 with sal_col3:
     sal_raise_month = st.selectbox("Annual Raise Month", months)
-cpf_bal = st.number_input("Current CPF(O/A) Balance")
+cpf_bal = st.number_input("Current CPF(O/A) Balance ($)",step=100)
 
 st.subheader(f"Your Projection")
 
@@ -147,7 +159,7 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
             bank_bal_inc += salary_raise/100*bank_bal_inc
             next_row['Salary']=salary
             next_row['Bank Increase']=bank_bal_inc
-        next_row['Bank Interest']=next_row['Bank Balance']*bank_annual_interest/12/100
+        next_row['Bank Interest']=next_row['Bank Balance']*bank_base_interest/12/100 + min(next_row['Bank Balance'],bank_bonus_interest_cap)*bank_bonus_interest/12/100
         next_row['Bank Balance']=next_row['Bank Balance']+next_row['Bank Interest']+bank_bal_inc
         cpf_bal_inc = calc_cpf_oa_increase(salary,next_date.year,age)
         next_row['CPF(OA) Increase']=cpf_bal_inc
@@ -174,7 +186,7 @@ else:
     st.info("Please fill up all 'Timeline' and 'Cashflow' fields for your projection to be generated. ")
 st.divider()
 
-st.subheader("Downpayment")
+st.subheader("Downpayment & Loan")
 if bank_bal and bank_bal_inc and cpf_bal and age>0:
     col1, col2 = st.columns([4, 1])
     col3, col4 = st.columns([4, 1])
@@ -182,14 +194,37 @@ if bank_bal and bank_bal_inc and cpf_bal and age>0:
     cpf_usage = col3.slider("I would like to use this much from my CPF(OA) balance", 0.0, proj_df.loc[proj_df.index[-1], 'CPF(OA) Balance'],step=1000.0)
     col2.markdown(f"**Bank Balance:**  \n${proj_df.loc[proj_df.index[-1], 'Bank Balance'] - bank_usage:,.2f}")
     col4.markdown(f"**CPF(OA) Balance:**  \n${proj_df.loc[proj_df.index[-1], 'CPF(OA) Balance'] - cpf_usage:,.2f}")
-    downpayment_percentage = st.number_input("I am making downpayment of __% property value", value=25)
-    expected_grants = st.number_input("Expected grant(s) of $__", value=40000)
-    max_property = ((bank_usage+cpf_usage)/downpayment_percentage*100)+expected_grants
+    
+    
+    pay_col1, pay_col2, pay_col3 = st.columns(3)
+    latest_salary = proj_df['Salary'].iloc[-1]
+    with pay_col1:
+        loan_repayment_val = st.number_input("30% of Projected Income ($)", value=msr*latest_salary, disabled=True)
+    with pay_col2: 
+        loan_duration = st.number_input("Loan Duration in Years", value=25)
+    with pay_col3:
+        loan_interest = st.number_input("Loan Interest Rate", value=2.5,step=0.01, format="%.2f")
+    loan = calc_loan_based_on_msr_salary(loan_repayment_val, loan_interest, loan_duration)
+    st.info(f"You can loan an estimated amount of ${loan:,.2f}. ")
+    expected_grants = st.number_input("Expected Grant(s) of $__", value=40000, step=1000)
+    max_property = bank_usage + cpf_usage + loan + expected_grants
     if bank_usage>0 or cpf_usage>0:
         st.success(f"You can afford a property up to ${max_property:,.2f}. ")
+        breakdown = {
+            "Source" : ["Bank", "CPF(O/A)", "Loan", "Grant(s)", "Total"],
+            "Amount": [
+                f"${bank_usage:,.2f}",
+                f"${cpf_usage:,.2f}",
+                f"${loan:,.2f}",
+                f"${expected_grants:,.2f}",
+                f"${max_property:,.2f}"
+            ]
+        }
+        breakdown_df = pd.DataFrame(breakdown)
+        st.table(breakdown_df.set_index("Source"))
     st.info("Please refer to [CPF Housing Grant for Singles](https://www.hdb.gov.sg/residential/buying-a-flat/understanding-your-eligibility-and-housing-loan-options/flat-and-grant-eligibility/singles/cpf-housing-grant-for-resale-flats-singles) "
         "and [CPF Housing Grants for Families](https://www.hdb.gov.sg/residential/buying-a-flat/understanding-your-eligibility-and-housing-loan-options/flat-and-grant-eligibility/couples-and-families/cpf-housing-grants-for-resale-flats-families) "
-        "for more information on grants.")        
+        "for more information on grants. You can also use [HDB's Loan Calculator](https://homes.hdb.gov.sg/home/calculator/budget) for a more 'official' loan estimate. ")
     if bank_usage>0 or cpf_usage>0:
         st.info("Note that there are other upfront payments beyond the downpayment, and to maintain enough savings / emergency funds. ")
 else:
@@ -225,7 +260,7 @@ pivot = generate_pivot(filtered_df)
 
 # Appreciation hdb_df
 if selected_town:
-    st.text('Average Annual Appreciation Over Last __ Years by Town (For Reference)')
+    st.text('Average Annual Appreciation (%) Over Last __ Years by Town (For Reference)')
     average_appreciation_df = pivot.tail(16).copy()
     for col in average_appreciation_df.columns:
         for row in reversed(average_appreciation_df.index[1:]):
@@ -275,7 +310,7 @@ if selected_town:
         st.dataframe(future_df)
 
     def highlight_negative_row(row):
-        if row['Balance (of initial Bank+OA)'] < 0:
+        if row['Balance from Budget'] < 0:
             return ['color: red'] * len(row)  # apply red text color to entire row
         else:
             return [''] * len(row)  # no style
@@ -289,8 +324,7 @@ if selected_town:
         sorted_df = pd.DataFrame({
             'Town': sorted_last_row.index,
             'Value': sorted_last_row.values,
-            'Downpayment': sorted_last_row.values/100*downpayment_percentage,
-            'Balance (of initial Bank+OA)': bank_usage+cpf_usage-sorted_last_row.values/100*downpayment_percentage
+            'Balance from Budget': max_property-sorted_last_row.values
         })
     except: 
         sorted_df = pd.DataFrame({
@@ -313,4 +347,4 @@ if selected_town:
         numeric_cols = rounded_df.select_dtypes(include=["number"]).columns
         rounded_df[numeric_cols] = rounded_df[numeric_cols].round(1)
         st.dataframe(rounded_df)
-        st.warning("Complete the sections 'Your Projection' and 'Downpayment' sections to see balances after downpayment.")
+        st.warning("Complete the sections 'Your Projection' and 'Downpayment & Loan' sections to see cash balance after the initial budget.")
