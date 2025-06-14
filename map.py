@@ -285,7 +285,7 @@ def render_map():
     </div>
     """, unsafe_allow_html=True)
 
-if len(layer_data) > 1000:
+if len(layer_data) > 2500:
     st.text("Your current filters have too much results. Please reduce your selections. ")
 else:
     with st.spinner("Loading map... Please wait"):
