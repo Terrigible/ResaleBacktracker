@@ -120,10 +120,10 @@ cutoff_date = datetime.today() - relativedelta(months=12)
 hdb_df = hdb_df[hdb_df['month_dt'] >= cutoff_date]
 
 flat_types = sorted(hdb_df['flat_type'].unique())
-selected_flat_type = st.pills("Desired Flat Type", options=flat_types, default=flat_types, selection_mode="multi")
+selected_flat_type = st.pills("Desired Flat Types", options=flat_types, default=flat_types, selection_mode="multi")
 hdb_df = hdb_df[(hdb_df['flat_type'].isin(selected_flat_type))]
 towns = sorted(hdb_df['town'].unique())
-selected_town = st.pills("Desired Towns", options=towns, default=towns, selection_mode="multi")
+selected_town = st.pills("Desired Towns", options=towns, selection_mode="multi")
 hdb_df = hdb_df[(hdb_df['town'].isin(selected_town))]
 
 # Show price distribution ##############################################################################
@@ -285,6 +285,8 @@ def render_map():
     </div>
     """, unsafe_allow_html=True)
 
-with st.spinner("Loading map... Please wait"):
-    render_map()
-
+if len(layer_data) > 1000:
+    st.text("Your current filters have too much results. Please reduce your selections. ")
+else:
+    with st.spinner("Loading map... Please wait"):
+        render_map()
