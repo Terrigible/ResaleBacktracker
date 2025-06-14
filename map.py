@@ -106,7 +106,7 @@ past_prices_df = collate_past_transactions(hdb_df)
 st.title("How much is resale HDB?")
 earliest_date = pd.to_datetime(hdb_df['month'].min())
 latest_date = pd.to_datetime(hdb_df['month'].max())
-st.text("Property data is 12 months leading up to "+ latest_date.strftime('%b') + " " + str(latest_date.year) + " from https://data.gov.sg/collections/189/view")
+st.text("Property data is the 12 months leading up to "+ latest_date.strftime('%b') + " " + str(latest_date.year) + ", from https://data.gov.sg/collections/189/view")
 st.divider()
 
 # Filtering ############################################################################################
