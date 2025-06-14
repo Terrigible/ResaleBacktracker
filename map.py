@@ -38,26 +38,22 @@ def download_resale_hdb_dataset():
         temp_dfs.append(temp_df)
     return_df = pd.concat(temp_dfs, ignore_index=True)
     return_df['flat_type'] = return_df['flat_type'].str.replace('MULTI GENERATION', 'MULTI-GENERATION', case=False, regex=True)
-    columns_to_remove = ['storey_range', 'flat_model', 'lease_commence_date', 'remaining_lease']
+    columns_to_remove = ['storey_range', 'flat_model', 'remaining_lease']
     return_df = return_df.drop(columns=columns_to_remove)
     return(return_df)
 def price_to_rgb(x):
-    if x < 0.5:
+    midpoint = 0.75  # set this to 0.66 or 0.75 as needed
+    if x < midpoint:
         # green to yellow
-        r = int(2*x*255)
+        r = int((x / midpoint) * 255)
         g = 255
         b = 0
-        return f"rgb({r}, {g}, {b})"
     else:
         # yellow to red
         r = 255
-        g = int(2*(1-x)*255)
+        g = int(((1 - x) / (1 - midpoint)) * 255)
         b = 0
-        return f"rgb({r}, {g}, {b})"
-def add_alpha(color_str, alpha=1.0):
-    # color_str is like "rgb(r, g, b)"
-    # convert to "rgba(r, g, b, alpha)"
-    return color_str.replace("rgb", "rgba").replace(")", f", {alpha})")
+    return f"rgb({r}, {g}, {b})"
 def extract_price_bin_value(x):
     if x == "≥ $1M":
         return float('inf')  # push to the end
@@ -68,17 +64,49 @@ def bin_price(price):
         return "≥ $1M"
     else:
         return f"${int((price // bin_width) * bin_width):,}"
-def rgba_str_to_pydeck_color(rgba_str):
-    # rgba_str like "rgba(209, 255, 0, 1.0)"
-    parts = rgba_str.strip("rgba()").split(",")
+def rgb_str_to_pydeck_color(rgba_str):
+    parts = rgba_str.strip("rgb()").split(",")
     r, g, b = map(int, parts[:3])
-    a = float(parts[3])
-    a_int = int(a * 255)
-    return [r, g, b, a_int]
+    return [r, g, b]
+def extract_bin_midpoint(bin_str):
+    if bin_str == "≥ $1M":
+        return 1_050_000  # or some higher value to normalize
+    else:
+        base = int(bin_str.replace("$", "").replace(",", ""))
+        return base + bin_width / 2
+def format_and_filter_transactions(txns,period):
+    # Get the cutoff date N months ago
+    cutoff = datetime.today().replace(day=1) - relativedelta(months=period)
+    # Filter and format
+    return "<br>".join(
+        [
+            f"{t['month']}: ${int(t['resale_price']):,}"
+            for t in txns
+            if datetime.strptime(t['month'], "%Y-%m") >= cutoff
+        ]
+    )
+@st.cache_data
+def collate_past_transactions(df):
+    collapsed_df = df.groupby(['town', 'flat_type', 'block', 'street_name']).apply(
+        lambda g: pd.Series({
+            'past_transactions': [
+                {"month": row['month'], "resale_price": row['resale_price']}
+                for _, row in g.sort_values("month", ascending=False).iterrows()
+            ]
+        })
+    ).reset_index()
+    return collapsed_df
+
 # Get Data #############################################################################################
-st.title("How much is resale HDB?")
 hdb_df = download_resale_hdb_dataset()
 df = pd.read_csv('postal_code_latlong_all_latlong.csv')
+past_prices_df = collate_past_transactions(hdb_df)
+
+st.title("How much is resale HDB?")
+earliest_date = pd.to_datetime(hdb_df['month'].min())
+latest_date = pd.to_datetime(hdb_df['month'].max())
+st.text("Property data from " + earliest_date.strftime('%b') + " " + str(earliest_date.year) + " to "+ latest_date.strftime('%b') + " " + str(latest_date.year) + " from https://data.gov.sg/collections/189/view")
+st.divider()
 
 # Filtering ############################################################################################
 today = datetime.today()
@@ -111,19 +139,25 @@ price_data = price_data.sort_values(
 )
 # Create a sorted list of categories based on your mapped numeric values
 sorted_bins = price_data['price_bin'].tolist()
+st.markdown(
+    "<label style='font-weight: 500; font-size: 0.875rem;'>Filter by Price Distribution</label>",
+    unsafe_allow_html=True
+)
+min_price = hdb_df["resale_price"].min()
+max_price = hdb_df["resale_price"].max()
+median_price = hdb_df["resale_price"].median()
+price_data["mid_price"] = price_data["price_bin"].apply(extract_bin_midpoint)
+price_data["norm_price"] = (price_data["mid_price"] - min_price) / median_price
+price_data["color"] = price_data["norm_price"].apply(price_to_rgb)
 chart = alt.Chart(price_data).mark_bar().encode(
     x=alt.X('price_bin:N', 
-            sort=sorted_bins,   # <-- explicitly set order here
+            sort=sorted_bins,
             title=None, 
             axis=alt.Axis(labelAngle=0)),
     y=alt.Y('count:Q', title=None, axis=alt.Axis(labels=False, ticks=False)),
+    color=alt.Color('color:N', scale=None),  # disable Altair scale
     tooltip=['price_bin', 'count']
 ).properties(height=100)
-# Display chart
-st.markdown(
-    "<label style='font-weight: 500; font-size: 0.875rem;'>Price Distribution</label>",
-    unsafe_allow_html=True
-)
 st.altair_chart(chart, use_container_width=True)
 
 # Range of resale_price
@@ -139,7 +173,6 @@ highlight_range = st.slider(
     step=bin_width, 
     format="$%d"
 )
-
 # st.dataframe(hdb_df)
 
 hdb_df = hdb_df[
@@ -150,9 +183,14 @@ columns_to_remove = ['month', 'month_dt','price_bin']
 hdb_df = hdb_df.drop(columns=columns_to_remove)
 hdb_df = hdb_df.groupby(['town','flat_type','block', 'street_name'], as_index=False).mean()
 hdb_df = hdb_df.round().astype({col: 'int' for col in hdb_df.select_dtypes('float').columns})
-hdb_df = hdb_df.merge(
+hdb_df = hdb_df.merge( # merging for coordinates
     df[["block", "street_name", "lat", "lon"]],
     on=["block", "street_name"],
+    how="left"
+)
+hdb_df = hdb_df.merge( # merging for past transactions
+    past_prices_df[["flat_type","block", "street_name", "past_transactions"]],
+    on=["flat_type","block", "street_name"],
     how="left"
 )
 # st.dataframe(hdb_df)
@@ -163,17 +201,14 @@ hdb_df = hdb_df.dropna(subset=['lat', 'lon'])
 
 
 # Colouring
-min_price = hdb_df["resale_price"].min()
-max_price = hdb_df["resale_price"].max()
-median_price = hdb_df["resale_price"].median()
 hdb_df["norm_price"] = (hdb_df["resale_price"] - min_price) / median_price
 hdb_df["highlight"] = hdb_df["resale_price"].between(highlight_range[0], highlight_range[1])
 hdb_df["color"] = hdb_df["norm_price"].apply(price_to_rgb)
-hdb_df["color"] = hdb_df.apply(
-    lambda row: add_alpha(row["color"], alpha=1.0 if row["highlight"] else 0.2),
-    axis=1
-)
-hdb_df["color"] = hdb_df["color"].apply(rgba_str_to_pydeck_color)
+# hdb_df["color"] = hdb_df.apply(
+#     lambda row: add_alpha(row["color"], alpha=1.0 if row["highlight"] else 0.1),
+#     axis=1
+# )
+hdb_df["color"] = hdb_df["color"].apply(rgb_str_to_pydeck_color)
 
 
 # Take and create another df if no latlong
@@ -204,11 +239,18 @@ for _, row in room_types_df.iterrows():
             (hdb_df['flat_type'] == room_type)
         )
         hdb_df.loc[mask, 'lat'] += offset
+
+hdb_df["past_transactions_html"] = hdb_df["past_transactions"].apply(
+    lambda txns: format_and_filter_transactions(txns, period=12)
+)
+hdb_df["lease_commence_date"] = 99-(today.year-hdb_df["lease_commence_date"])
+hdb_df['resale_price_formatted'] = hdb_df['resale_price'].apply(lambda x: f"{int(x):,}")
+
 # st.dataframe(hdb_df)
 
 layer = pdk.Layer(
     "ScatterplotLayer",
-    data=hdb_df,
+    data=hdb_df[hdb_df['highlight']],
     get_position='[lon, lat]',
     get_radius=10,
     get_fill_color='color',
@@ -224,14 +266,26 @@ view_state = pdk.ViewState(
     zoom=11
 )
 
+
+
 st.pydeck_chart(pdk.Deck(
     map_style="mapbox://styles/mapbox/dark-v10",
     initial_view_state=view_state,
     layers=[layer],
     tooltip={
-        "html": "<b>{town}</b><br><b>{block}</b> <b>{street_name}</b><br>{flat_type}<br>${resale_price}",
-        "style": {"backgroundColor": "white", "color": "black"}
+    "html": """
+        <b>{town}</b><br>
+        <b>{block}</b> <b>{street_name}</b><br>
+        {flat_type} - ${resale_price_formatted}<br>
+        Remaining Lease - {lease_commence_date} years<br>
+        <hr style="margin:2px 0">
+        <b>Past Transactions:</b><br>{past_transactions_html}
+    """,
+    "style": {
+        "backgroundColor": "white",
+        "color": "black"
     }
+}
 ))
 
 if not missing_coords_df.empty:
