@@ -236,7 +236,7 @@ flat_types = sorted(hdb_df['flat_type'].unique())
 selected_flat_type = st.selectbox("Desired Flat Type", options=flat_types, index=2)
 
 towns = sorted(hdb_df[hdb_df['flat_type']==selected_flat_type]['town'].unique())
-selected_town = st.pills("Desired Towns (click to select)", options=towns, default=towns, selection_mode="multi")
+selected_town = st.pills("Desired Towns", options=towns, default=towns, selection_mode="multi")
 filtered_df = hdb_df[
     (hdb_df['flat_type']==selected_flat_type) &
     (hdb_df['town'].isin(selected_town))
