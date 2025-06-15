@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -80,19 +81,6 @@ def rgb_str_to_pydeck_color(rgba_str: str):
     return [r, g, b]
 
 
-def format_and_filter_transactions(txns: pd.Series, period: int):
-    # Get the cutoff date N months ago
-    cutoff = datetime.today().replace(day=1) - relativedelta(months=period)
-    # Filter and format
-    return "<br>".join(
-        [
-            f"{t['month']}: ${int(t['resale_price']):,}"
-            for t in txns
-            if datetime.strptime(t["month"], "%Y-%m") >= cutoff
-        ]
-    )
-
-
 @st.cache_data
 def collate_past_transactions(df: pd.DataFrame):
     # Sort once beforehand instead of in every group
@@ -130,9 +118,7 @@ def intro():
 
 def filters_type_town(hdb_df: pd.DataFrame):
     # Filtering ############################################################################################
-    records_start = pd.to_datetime(hdb_df["month"].min(), format="%Y-%m")
     hdb_df["month_dt"] = pd.to_datetime(hdb_df["month"], format="%Y-%m")
-    hdb_df.sort_values(by="month_dt", ascending=False)
     cutoff_date = datetime.today() - relativedelta(months=12)
     hdb_df = hdb_df[hdb_df["month_dt"] >= cutoff_date]
 
@@ -267,7 +253,7 @@ def filters_lease_range(hdb_df: pd.DataFrame):
     return lease_range
 
 
-def add_lat_long(hdb_df: pd.DataFrame):
+def add_lat_long(hdb_df: pd.DataFrame, df: pd.DataFrame):
     past_prices_df = collate_past_transactions(hdb_df)
     columns_to_remove = ["month", "month_dt", "price_bin"]
     hdb_df = hdb_df.drop(columns=columns_to_remove)
@@ -319,11 +305,18 @@ def offset_coords(hdb_df: pd.DataFrame):
 
     keys = list(zip(hdb_df["block"], hdb_df["street_name"], hdb_df["flat_type"]))
     hdb_df["lat"] += pd.Series(keys).map(offsets).fillna(0).values
-    hdb_df["resale_price_formatted"] = (
-        hdb_df["resale_price"].astype(int).map("{:,}".format)
+    hdb_df["resale_price_formatted"] = hdb_df["resale_price"].map("{:,}".format)
+    cutoff = int(
+        (datetime.today().replace(day=1) - relativedelta(months=12)).strftime("%Y%m")
     )
-    hdb_df["past_transactions_html"] = np.vectorize(format_and_filter_transactions)(
-        hdb_df["past_transactions"], 12
+    hdb_df["past_transactions_html"] = hdb_df["past_transactions"].map(
+        lambda txns: "<br>".join(
+            [
+                f"{t['month']}: ${t['resale_price']:,.0f}"
+                for t in txns
+                if int(t["month"].replace("-", "")) >= cutoff
+            ]
+        )
     )
     return hdb_df
 
@@ -410,7 +403,7 @@ med_price = hdb_df["resale_price"].median()
 # More processing
 highlight_range = filters_price_bin(hdb_df, min_price, med_price)  # Filters by Price
 lease_range = filters_lease_range(hdb_df)
-hdb_df, missing_coords_df = add_lat_long(hdb_df)  # Adds coordinates
+hdb_df, missing_coords_df = add_lat_long(hdb_df, df)  # Adds coordinates
 colour_nodes(hdb_df, min_price, med_price)
 hdb_df = offset_coords(hdb_df)
 # st.dataframe(hdb_df)
