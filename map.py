@@ -22,6 +22,7 @@ datasets = [ # These datasets are from 'Resale Flat Prices' https://data.gov.sg/
     "d_ea9ed51da2787afaf8e51f827c304208",
     "d_8b84c4ee58e3cfc0ece0d773c8ca6abc"
 ]
+today = datetime.today()
 
 # Download datasets
 @st.cache_data
@@ -39,6 +40,7 @@ def download_resale_hdb_dataset():
     return_df = pd.concat(temp_dfs, ignore_index=True)
     return_df['flat_type'] = return_df['flat_type'].str.replace('MULTI GENERATION', 'MULTI-GENERATION', case=False, regex=True)
     columns_to_remove = ['storey_range', 'flat_model', 'remaining_lease']
+    return_df["lease_commence_date"] = 99-(today.year-return_df["lease_commence_date"])
     return_df = return_df.drop(columns=columns_to_remove)
     return(return_df)
 def price_to_rgb(x):
@@ -165,6 +167,37 @@ def filters_price_bin(hdb_df, min_val, med_val):
         format="$%d"
     )
     return highlight_range
+def filters_lease_range(hdb_df):
+    # Get min and max lease values
+    min_lease = int(hdb_df['lease_commence_date'].min())
+    max_lease = int(hdb_df['lease_commence_date'].max())
+    # Count occurrences of each lease year
+    lease_counts = hdb_df['lease_commence_date'].value_counts().reset_index()
+    lease_counts.columns = ['lease_years', 'count']
+    lease_counts = lease_counts.sort_values('lease_years')
+    # Display label
+    st.markdown(
+        "<label style='font-weight: 500; font-size: 0.875rem;'>Filter by Remaining Lease (Years)</label>",
+        unsafe_allow_html=True
+    )
+    # Show bar chart
+    chart = alt.Chart(lease_counts).mark_bar().encode(
+        x=alt.X('lease_years:O', title=None, sort='ascending'),
+        y=alt.Y('count:Q', title=None, axis=alt.Axis(labels=False, ticks=False)),
+        tooltip=['lease_years', 'count']
+    ).properties(height=100)
+    st.altair_chart(chart, use_container_width=True)
+    # Add slider filter
+    lease_range = st.slider(
+        "Lease range",
+        label_visibility="collapsed",
+        min_value=min_lease,
+        max_value=max_lease,
+        value=(min_lease, max_lease),
+        step=1,
+        format="%d years"
+    )
+    return lease_range
 def add_lat_long(hdb_df):
     past_prices_df = collate_past_transactions(hdb_df)
     columns_to_remove = ['month', 'month_dt','price_bin']
@@ -188,7 +221,6 @@ def add_lat_long(hdb_df):
     return(hdb_df,missing_coords_df)
 def colour_nodes(hdb_df, min_price, med_price):
     hdb_df["norm_price"] = (hdb_df["resale_price"] - min_price) / med_price
-    hdb_df["highlight"] = hdb_df["resale_price"].between(highlight_range[0], highlight_range[1])
     hdb_df["color"] = hdb_df["norm_price"].apply(price_to_rgb)
     hdb_df["color"] = hdb_df["color"].apply(rgb_str_to_pydeck_color)
 def offset_coords(hdb_df):
@@ -209,7 +241,6 @@ def offset_coords(hdb_df):
         return offsets.get((row['block'], row['street_name'], row['flat_type']), 0)
     keys = list(zip(hdb_df['block'], hdb_df['street_name'], hdb_df['flat_type']))
     hdb_df['lat'] += pd.Series(keys).map(offsets).fillna(0).values
-    hdb_df["lease_commence_date"] = 99-(today.year-hdb_df["lease_commence_date"])
     hdb_df['resale_price_formatted'] = hdb_df['resale_price'].astype(int).map('{:,}'.format)
     hdb_df["past_transactions_html"] = np.vectorize(format_and_filter_transactions)(
         hdb_df["past_transactions"], 12
@@ -217,6 +248,10 @@ def offset_coords(hdb_df):
     return hdb_df
 def render_map(hdb_df):
     columns_to_keep = ['lat', 'lon', 'color', 'resale_price_formatted', 'lease_commence_date', 'past_transactions_html', 'town', 'block', 'street_name', 'flat_type']
+    hdb_df["highlight"] = (
+    hdb_df["resale_price"].between(highlight_range[0], highlight_range[1]) &
+    hdb_df["lease_commence_date"].between(lease_range[0], lease_range[1])
+    )  
     hdb_df = hdb_df.loc[hdb_df['highlight'], columns_to_keep]
     layer = pdk.Layer(
         "ScatterplotLayer",
@@ -269,7 +304,6 @@ def render_map(hdb_df):
 # Get Data #############################################################################################
 hdb_df = download_resale_hdb_dataset()
 df = pd.read_csv('postal_code_latlong_all_latlong.csv')
-today = datetime.today()
 
 # Header and such
 intro() 
@@ -282,6 +316,7 @@ med_price = hdb_df["resale_price"].median()
 
 # More processing
 highlight_range = filters_price_bin(hdb_df,min_price,med_price) # Filters by Price
+lease_range = filters_lease_range(hdb_df)
 hdb_df,missing_coords_df = add_lat_long(hdb_df) # Adds coordinates  
 colour_nodes(hdb_df,min_price,med_price)
 hdb_df = offset_coords(hdb_df)
