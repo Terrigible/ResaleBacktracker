@@ -16,11 +16,11 @@ from pathlib import Path
 # Instantiate
 current_path = Path.cwd()
 datasets = [ # These datasets are from 'Resale Flat Prices' https://data.gov.sg/collections/189/view
-    "d_ebc5ab87086db484f88045b47411ebc5",
-    "d_43f493c6c50d54243cc1eab0df142d6a",
-    "d_2d5ff9ea31397b66239f245f57751537",
-    "d_ea9ed51da2787afaf8e51f827c304208",
-    "d_8b84c4ee58e3cfc0ece0d773c8ca6abc"
+    # "d_ebc5ab87086db484f88045b47411ebc5",
+    # "d_43f493c6c50d54243cc1eab0df142d6a",
+    # "d_2d5ff9ea31397b66239f245f57751537",
+    # "d_ea9ed51da2787afaf8e51f827c304208",
+    "d_8b84c4ee58e3cfc0ece0d773c8ca6abc" # you only need the latest file, since only past 12 months
 ]
 today = datetime.today()
 
