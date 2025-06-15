@@ -188,15 +188,25 @@ def filters_lease_range(hdb_df):
     ).properties(height=100)
     st.altair_chart(chart, use_container_width=True)
     # Add slider filter
-    lease_range = st.slider(
-        "Lease range",
-        label_visibility="collapsed",
-        min_value=min_lease,
-        max_value=max_lease,
-        value=(min_lease, max_lease),
-        step=1,
-        format="%d years"
-    )
+    if min_lease == max_lease:
+        lease_range = (min_lease, max_lease)
+        st.select_slider(
+            "Lease range",
+            label_visibility="collapsed",
+            options=[min_lease,max_lease],
+            value=min_lease,
+            disabled=True
+        )
+    else:
+        lease_range = st.slider(
+            "Lease range",
+            label_visibility="collapsed",
+            min_value=min_lease,
+            max_value=max_lease,
+            value=(min_lease, max_lease),
+            step=1,
+            format="%d years"
+        )
     return lease_range
 def add_lat_long(hdb_df):
     past_prices_df = collate_past_transactions(hdb_df)
