@@ -105,7 +105,7 @@ def filters_type_town(hdb_df):
     selected_flat_type = st.pills("Desired Flat Types", options=flat_types, default=flat_types, selection_mode="multi")
     hdb_df = hdb_df[(hdb_df['flat_type'].isin(selected_flat_type))]
     towns = sorted(hdb_df['town'].unique())
-    selected_town = st.pills("Desired Towns", options=towns, default="ANG MO KIO", selection_mode="multi")
+    selected_town = st.pills("Desired Towns", options=towns, default=towns, selection_mode="multi")
     hdb_df = hdb_df[(hdb_df['town'].isin(selected_town))]
     return hdb_df
 def filters_price_bin(hdb_df, min_val, med_val):
@@ -285,9 +285,9 @@ highlight_range = filters_price_bin(hdb_df,min_price,med_price) # Filters by Pri
 hdb_df,missing_coords_df = add_lat_long(hdb_df) # Adds coordinates  
 colour_nodes(hdb_df,min_price,med_price)
 hdb_df = offset_coords(hdb_df)
-st.dataframe(hdb_df)
+# st.dataframe(hdb_df)
 
-if len(hdb_df) > 2500:
+if len(hdb_df) > 20000:
     st.text("Your current filters have too much results. Please reduce your selections. ")
 else:
     with st.spinner("Loading map... Please wait"):
