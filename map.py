@@ -141,21 +141,14 @@ def filters_type_town(hdb_df: pd.DataFrame):
 def filters_price_bin(hdb_df: pd.DataFrame, min_val: float, med_val: float):
     # Show price distribution ##############################################################################
     # Define bin width and threshold
-    bin_width = 20000
-    limit = 1000000
+    bin_width = 50000
 
     def bin_price(price: float):
-        if price >= limit:
-            return "≥ $1M"
-        else:
-            return f"${int((price // bin_width) * bin_width):,}"
+        return f"${int((price // bin_width) * bin_width):,}"
 
     def extract_bin_midpoint(bin_str: str):
-        if bin_str == "≥ $1M":
-            return 1_050_000  # or some higher value to normalize
-        else:
-            base = int(bin_str.replace("$", "").replace(",", ""))
-            return base + bin_width / 2
+        base = int(bin_str.replace("$", "").replace(",", ""))
+        return base + bin_width / 2
 
     hdb_df["price_bin"] = hdb_df["resale_price"].apply(bin_price)
     # Count entries per bin and sort (custom sort to put "≥ $1M" last)
@@ -189,9 +182,8 @@ def filters_price_bin(hdb_df: pd.DataFrame, min_val: float, med_val: float):
     st.altair_chart(chart, use_container_width=True)
     # Range of resale_price
     min_price = int(hdb_df["resale_price"].min() // bin_width * bin_width)
-    max_price = min(
-        limit, int(hdb_df["resale_price"].max() // bin_width * bin_width) + bin_width
-    )
+    max_price = int(hdb_df["resale_price"].max() // bin_width * bin_width) + bin_width
+
     # Streamlit slider for price range
     highlight_range = st.slider(
         "Highlight range",
