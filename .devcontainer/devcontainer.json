@@ -10,10 +10,14 @@
       ]
     },
     "vscode": {
-      "settings": {},
+      "settings": {
+        "ruff.importStrategy": "useBundled",
+        "editor.formatOnSave": true
+      },
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance"
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff"
       ]
     }
   },
