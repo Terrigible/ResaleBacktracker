@@ -156,7 +156,7 @@ def filters_price_bin(hdb_df, min_val, med_val):
     max_price = min(limit, int(hdb_df['resale_price'].max() // bin_width * bin_width) + bin_width)
     # Streamlit slider for price range
     highlight_range = st.slider(
-        "", 
+        "Highlight range", 
         label_visibility="collapsed",
         min_value=min_price, 
         max_value=max_price, 
