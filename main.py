@@ -56,7 +56,7 @@ def download_resale_hdb_dataset():
 
 
 # Months diff
-def months_diff(future_year, future_month):
+def months_diff(future_year: int, future_month: int):
     today = datetime.today()
     year_diff = future_year - today.year
     month_diff = future_month - today.month
@@ -64,7 +64,7 @@ def months_diff(future_year, future_month):
     return total_months
 
 
-def calc_cpf_oa_increase(salary, year, age):
+def calc_cpf_oa_increase(salary: int, year: int, age: int):
     portion_to_oa = 0
     cap = 0
 
@@ -93,7 +93,7 @@ def calc_cpf_oa_increase(salary, year, age):
     return min(salary, cap) * 0.37 * portion_to_oa
 
 
-def calc_loan_based_on_msr_salary(payment, interest, years):
+def calc_loan_based_on_msr_salary(payment: float, interest: float, years: int):
     interest = interest / 100 / 12
     total_payments = years * 12
     loan = payment * (1 - (1 + interest) ** (-total_payments)) / interest
@@ -351,7 +351,7 @@ filtered_df = hdb_df[
 
 
 @st.cache_data
-def generate_pivot(filtered_df):
+def generate_pivot(filtered_df: pd.DataFrame):
     filtered_df = filtered_df.copy()
     filtered_df["year"] = pd.to_datetime(filtered_df["month"]).dt.year
     pivot = pd.pivot_table(
@@ -439,7 +439,7 @@ if selected_town:
     else:
         st.dataframe(future_df)
 
-    def highlight_negative_row(row):
+    def highlight_negative_row(row: pd.Series):
         if row["Balance from Budget"] < 0:
             return ["color: red"] * len(row)  # apply red text color to entire row
         else:

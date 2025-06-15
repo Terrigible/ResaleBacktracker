@@ -52,7 +52,7 @@ def download_resale_hdb_dataset():
     return return_df
 
 
-def price_to_rgb(x):
+def price_to_rgb(x: float):
     midpoint = 0.75  # set this to 0.66 or 0.75 as needed
     if x < midpoint:
         # green to yellow
@@ -67,20 +67,20 @@ def price_to_rgb(x):
     return f"rgb({r}, {g}, {b})"
 
 
-def extract_price_bin_value(x):
+def extract_price_bin_value(x: str):
     if x == "≥ $1M":
         return float("inf")  # push to the end
     else:
         return int(x.replace("$", "").replace(",", ""))
 
 
-def rgb_str_to_pydeck_color(rgba_str):
+def rgb_str_to_pydeck_color(rgba_str: str):
     parts = rgba_str.strip("rgb()").split(",")
     r, g, b = map(int, parts[:3])
     return [r, g, b]
 
 
-def format_and_filter_transactions(txns, period):
+def format_and_filter_transactions(txns: pd.Series, period: int):
     # Get the cutoff date N months ago
     cutoff = datetime.today().replace(day=1) - relativedelta(months=period)
     # Filter and format
@@ -94,7 +94,7 @@ def format_and_filter_transactions(txns, period):
 
 
 @st.cache_data
-def collate_past_transactions(df):
+def collate_past_transactions(df: pd.DataFrame):
     # Sort once beforehand instead of in every group
     df_sorted = df.sort_values("month", ascending=False).copy()
     # Zip month and resale_price into dicts
@@ -128,7 +128,7 @@ def intro():
     st.divider()
 
 
-def filters_type_town(hdb_df):
+def filters_type_town(hdb_df: pd.DataFrame):
     # Filtering ############################################################################################
     records_start = pd.to_datetime(hdb_df["month"].min(), format="%Y-%m")
     hdb_df["month_dt"] = pd.to_datetime(hdb_df["month"], format="%Y-%m")
@@ -152,19 +152,19 @@ def filters_type_town(hdb_df):
     return hdb_df
 
 
-def filters_price_bin(hdb_df, min_val, med_val):
+def filters_price_bin(hdb_df: pd.DataFrame, min_val: float, med_val: float):
     # Show price distribution ##############################################################################
     # Define bin width and threshold
     bin_width = 20000
     limit = 1000000
 
-    def bin_price(price):
+    def bin_price(price: float):
         if price >= limit:
             return "≥ $1M"
         else:
             return f"${int((price // bin_width) * bin_width):,}"
 
-    def extract_bin_midpoint(bin_str):
+    def extract_bin_midpoint(bin_str: str):
         if bin_str == "≥ $1M":
             return 1_050_000  # or some higher value to normalize
         else:
@@ -219,7 +219,7 @@ def filters_price_bin(hdb_df, min_val, med_val):
     return highlight_range
 
 
-def filters_lease_range(hdb_df):
+def filters_lease_range(hdb_df: pd.DataFrame):
     # Get min and max lease values
     min_lease = int(hdb_df["lease_commence_date"].min())
     max_lease = int(hdb_df["lease_commence_date"].max())
@@ -267,7 +267,7 @@ def filters_lease_range(hdb_df):
     return lease_range
 
 
-def add_lat_long(hdb_df):
+def add_lat_long(hdb_df: pd.DataFrame):
     past_prices_df = collate_past_transactions(hdb_df)
     columns_to_remove = ["month", "month_dt", "price_bin"]
     hdb_df = hdb_df.drop(columns=columns_to_remove)
@@ -294,13 +294,13 @@ def add_lat_long(hdb_df):
     return (hdb_df, missing_coords_df)
 
 
-def colour_nodes(hdb_df, min_price, med_price):
+def colour_nodes(hdb_df: pd.DataFrame, min_price: float, med_price: float):
     hdb_df["norm_price"] = (hdb_df["resale_price"] - min_price) / med_price
     hdb_df["color"] = hdb_df["norm_price"].apply(price_to_rgb)
     hdb_df["color"] = hdb_df["color"].apply(rgb_str_to_pydeck_color)
 
 
-def offset_coords(hdb_df):
+def offset_coords(hdb_df: pd.DataFrame):
     # Step 1: Map each (block, street_name) to room_types
     block_street_to_types = hdb_df.groupby(["block", "street_name"])[
         "flat_type"
@@ -314,7 +314,7 @@ def offset_coords(hdb_df):
             offsets[(block, street, flat_type)] = -0.000075 * i
 
     # Step 3: Apply offsets using vectorized logic
-    def get_offset(row):
+    def get_offset(row: pd.Series):
         return offsets.get((row["block"], row["street_name"], row["flat_type"]), 0)
 
     keys = list(zip(hdb_df["block"], hdb_df["street_name"], hdb_df["flat_type"]))
@@ -328,7 +328,7 @@ def offset_coords(hdb_df):
     return hdb_df
 
 
-def render_map(hdb_df):
+def render_map(hdb_df: pd.DataFrame):
     columns_to_keep = [
         "lat",
         "lon",
