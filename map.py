@@ -89,9 +89,9 @@ def collate_past_transactions(df):
 @st.cache_data
 def intro():
     st.title("How much is resale HDB?")
-    earliest_date = pd.to_datetime(hdb_df['month'].min())
     latest_date = pd.to_datetime(hdb_df['month'].max())
-    st.text("Property data is the 12 months leading up to "+ latest_date.strftime('%b') + " " + str(latest_date.year) + ", from https://data.gov.sg/collections/189/view")
+    past_date = latest_date - pd.DateOffset(months=13)
+    st.text("Property data is from " + past_date.strftime('%b') + " " + str(past_date.year) + " to " + latest_date.strftime('%b') + " " + str(latest_date.year) + ", from https://data.gov.sg/collections/189/view")
     st.divider()
 def filters_type_town(hdb_df):
     # Filtering ############################################################################################
