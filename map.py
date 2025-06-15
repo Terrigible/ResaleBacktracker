@@ -59,21 +59,10 @@ def extract_price_bin_value(x):
         return float('inf')  # push to the end
     else:
         return int(x.replace("$", "").replace(",", ""))
-def bin_price(price):
-    if price >= limit:
-        return "≥ $1M"
-    else:
-        return f"${int((price // bin_width) * bin_width):,}"
 def rgb_str_to_pydeck_color(rgba_str):
     parts = rgba_str.strip("rgb()").split(",")
     r, g, b = map(int, parts[:3])
     return [r, g, b]
-def extract_bin_midpoint(bin_str):
-    if bin_str == "≥ $1M":
-        return 1_050_000  # or some higher value to normalize
-    else:
-        base = int(bin_str.replace("$", "").replace(",", ""))
-        return base + bin_width / 2
 def format_and_filter_transactions(txns,period):
     # Get the cutoff date N months ago
     cutoff = datetime.today().replace(day=1) - relativedelta(months=period)
@@ -97,149 +86,141 @@ def collate_past_transactions(df):
     ).reset_index(name="past_transactions")
 
     return collapsed_df
+@st.cache_data
+def intro():
+    st.title("How much is resale HDB?")
+    earliest_date = pd.to_datetime(hdb_df['month'].min())
+    latest_date = pd.to_datetime(hdb_df['month'].max())
+    st.text("Property data is the 12 months leading up to "+ latest_date.strftime('%b') + " " + str(latest_date.year) + ", from https://data.gov.sg/collections/189/view")
+    st.divider()
+def filters_type_town(hdb_df):
+    # Filtering ############################################################################################
+    records_start = pd.to_datetime(hdb_df['month'].min(), format='%Y-%m')
+    hdb_df['month_dt'] = pd.to_datetime(hdb_df['month'], format='%Y-%m')
+    hdb_df.sort_values(by='month_dt', ascending=False)
+    cutoff_date = datetime.today() - relativedelta(months=12)
+    hdb_df = hdb_df[hdb_df['month_dt'] >= cutoff_date]
 
-# Get Data #############################################################################################
-hdb_df = download_resale_hdb_dataset()
-df = pd.read_csv('postal_code_latlong_all_latlong.csv')
-past_prices_df = collate_past_transactions(hdb_df)
-
-st.title("How much is resale HDB?")
-earliest_date = pd.to_datetime(hdb_df['month'].min())
-latest_date = pd.to_datetime(hdb_df['month'].max())
-st.text("Property data is the 12 months leading up to "+ latest_date.strftime('%b') + " " + str(latest_date.year) + ", from https://data.gov.sg/collections/189/view")
-st.divider()
-
-# Filtering ############################################################################################
-today = datetime.today()
-records_start = pd.to_datetime(hdb_df['month'].min(), format='%Y-%m')
-# past_months_max_val = (today.year-records_start.year)*12+today.month
-# past_months = st.number_input("Use average resale price of past _ months", value=12, min_value=1, max_value=past_months_max_val)
-hdb_df['month_dt'] = pd.to_datetime(hdb_df['month'], format='%Y-%m')
-hdb_df.sort_values(by='month_dt', ascending=False)
-cutoff_date = datetime.today() - relativedelta(months=12)
-hdb_df = hdb_df[hdb_df['month_dt'] >= cutoff_date]
-
-flat_types = sorted(hdb_df['flat_type'].unique())
-selected_flat_type = st.pills("Desired Flat Types", options=flat_types, default=flat_types, selection_mode="multi")
-hdb_df = hdb_df[(hdb_df['flat_type'].isin(selected_flat_type))]
-towns = sorted(hdb_df['town'].unique())
-selected_town = st.pills("Desired Towns", options=towns, default="ANG MO KIO", selection_mode="multi")
-hdb_df = hdb_df[(hdb_df['town'].isin(selected_town))]
-
-# Show price distribution ##############################################################################
-# Define bin width and threshold
-bin_width = 20000
-limit = 1000000
-hdb_df['price_bin'] = hdb_df['resale_price'].apply(bin_price)
-# Count entries per bin and sort (custom sort to put "≥ $1M" last)
-price_data = hdb_df['price_bin'].value_counts().reset_index()
-price_data.columns = ['price_bin', 'count']
-price_data = price_data.sort_values(
-    by='price_bin',
-    key=lambda col: col.map(extract_price_bin_value)
-)
-# Create a sorted list of categories based on your mapped numeric values
-sorted_bins = price_data['price_bin'].tolist()
-st.markdown(
-    "<label style='font-weight: 500; font-size: 0.875rem;'>Filter by Price Distribution</label>",
-    unsafe_allow_html=True
-)
-min_price = hdb_df["resale_price"].min()
-max_price = hdb_df["resale_price"].max()
-median_price = hdb_df["resale_price"].median()
-price_data["mid_price"] = price_data["price_bin"].apply(extract_bin_midpoint)
-price_data["norm_price"] = (price_data["mid_price"] - min_price) / median_price
-price_data["color"] = price_data["norm_price"].apply(price_to_rgb)
-chart = alt.Chart(price_data).mark_bar().encode(
-    x=alt.X('price_bin:N', 
-            sort=sorted_bins,
-            title=None, 
-            axis=alt.Axis(labelAngle=0)),
-    y=alt.Y('count:Q', title=None, axis=alt.Axis(labels=False, ticks=False)),
-    color=alt.Color('color:N', scale=None),  # disable Altair scale
-    tooltip=['price_bin', 'count']
-).properties(height=100)
-st.altair_chart(chart, use_container_width=True)
-print("end of bin")
-# Range of resale_price
-min_price = int(hdb_df['resale_price'].min() // bin_width * bin_width)
-max_price = min(limit, int(hdb_df['resale_price'].max() // bin_width * bin_width) + bin_width)
-# Streamlit slider for price range
-highlight_range = st.slider(
-    "", 
-    label_visibility="collapsed",
-    min_value=min_price, 
-    max_value=max_price, 
-    value=(min_price, max_price), 
-    step=bin_width, 
-    format="$%d"
-)
-# st.dataframe(hdb_df)
-
-hdb_df = hdb_df[
-    (hdb_df['flat_type'].isin(selected_flat_type)) &
-    (hdb_df['town'].isin(selected_town))
-    ]
-columns_to_remove = ['month', 'month_dt','price_bin']
-hdb_df = hdb_df.drop(columns=columns_to_remove)
-hdb_df = hdb_df.groupby(['town','flat_type','block', 'street_name'], as_index=False).mean()
-hdb_df = hdb_df.round().astype({col: 'int' for col in hdb_df.select_dtypes('float').columns})
-hdb_df = hdb_df.merge( # merging for coordinates
-    df[["block", "street_name", "lat", "lon"]],
-    on=["block", "street_name"],
-    how="left"
-)
-hdb_df = hdb_df.merge( # merging for past transactions
-    past_prices_df[["flat_type","block", "street_name", "past_transactions"]],
-    on=["flat_type","block", "street_name"],
-    how="left"
-)
-# st.dataframe(hdb_df)
-# Clean up those missing coordinates
-missing_coords_df = hdb_df[hdb_df['lat'].isna() | hdb_df['lon'].isna()]
-hdb_df = hdb_df.dropna(subset=['lat', 'lon'])
-
-# Colouring
-hdb_df["norm_price"] = (hdb_df["resale_price"] - min_price) / median_price
-hdb_df["highlight"] = hdb_df["resale_price"].between(highlight_range[0], highlight_range[1])
-hdb_df["color"] = hdb_df["norm_price"].apply(price_to_rgb)
-hdb_df["color"] = hdb_df["color"].apply(rgb_str_to_pydeck_color)
-
-# Step 1: Map each (block, street_name) to room_types
-block_street_to_types = (
-    hdb_df.groupby(['block', 'street_name'])['flat_type']
-    .unique()
-)
-# Step 2: Create a mapping of (block, street_name, flat_type) → offset
-offsets = {}
-for (block, street), types in block_street_to_types.items():
-    if len(types) <= 1:
-        continue
-    for i, flat_type in enumerate(types[1:], start=1):
-        offsets[(block, street, flat_type)] = -0.000075 * i
-# Step 3: Apply offsets using vectorized logic
-def get_offset(row):
-    return offsets.get((row['block'], row['street_name'], row['flat_type']), 0)
-keys = list(zip(hdb_df['block'], hdb_df['street_name'], hdb_df['flat_type']))
-hdb_df['lat'] += pd.Series(keys).map(offsets).fillna(0).values
-hdb_df["lease_commence_date"] = 99-(today.year-hdb_df["lease_commence_date"])
-hdb_df['resale_price_formatted'] = hdb_df['resale_price'].astype(int).map('{:,}'.format)
-hdb_df["past_transactions_html"] = np.vectorize(format_and_filter_transactions)(
-    hdb_df["past_transactions"], 12
-)
-
-# st.dataframe(hdb_df)
-columns_to_keep = ['lat', 'lon', 'color', 'resale_price_formatted', 'lease_commence_date', 'past_transactions_html', 'town', 'block', 'street_name', 'flat_type']
-layer_data = hdb_df.loc[hdb_df['highlight'], columns_to_keep]
-
-if not missing_coords_df.empty:
-    st.text("Transactions for the following new blocks are new and are missing coordinate data. They will not show up on the map. ")
-    st.dataframe(missing_coords_df)
-
-def render_map():
+    flat_types = sorted(hdb_df['flat_type'].unique())
+    selected_flat_type = st.pills("Desired Flat Types", options=flat_types, default=flat_types, selection_mode="multi")
+    hdb_df = hdb_df[(hdb_df['flat_type'].isin(selected_flat_type))]
+    towns = sorted(hdb_df['town'].unique())
+    selected_town = st.pills("Desired Towns", options=towns, default="ANG MO KIO", selection_mode="multi")
+    hdb_df = hdb_df[(hdb_df['town'].isin(selected_town))]
+    return hdb_df
+def filters_price_bin(hdb_df, min_val, med_val):
+    # Show price distribution ##############################################################################
+    # Define bin width and threshold
+    bin_width = 20000
+    limit = 1000000
+    def bin_price(price):
+        if price >= limit:
+            return "≥ $1M"
+        else:
+            return f"${int((price // bin_width) * bin_width):,}"
+    def extract_bin_midpoint(bin_str):
+        if bin_str == "≥ $1M":
+            return 1_050_000  # or some higher value to normalize
+        else:
+            base = int(bin_str.replace("$", "").replace(",", ""))
+            return base + bin_width / 2
+    hdb_df['price_bin'] = hdb_df['resale_price'].apply(bin_price)
+    # Count entries per bin and sort (custom sort to put "≥ $1M" last)
+    price_data = hdb_df['price_bin'].value_counts().reset_index()
+    price_data.columns = ['price_bin', 'count']
+    price_data = price_data.sort_values(
+        by='price_bin',
+        key=lambda col: col.map(extract_price_bin_value)
+    )
+    # Create a sorted list of categories based on your mapped numeric values
+    sorted_bins = price_data['price_bin'].tolist()
+    st.markdown(
+        "<label style='font-weight: 500; font-size: 0.875rem;'>Filter by Price Distribution</label>",
+        unsafe_allow_html=True
+    )
+    price_data["mid_price"] = price_data["price_bin"].apply(extract_bin_midpoint)
+    price_data["norm_price"] = (price_data["mid_price"] - min_val) / med_val
+    price_data["color"] = price_data["norm_price"].apply(price_to_rgb)
+    chart = alt.Chart(price_data).mark_bar().encode(
+        x=alt.X('price_bin:N', 
+                sort=sorted_bins,
+                title=None, 
+                axis=alt.Axis(labelAngle=0)),
+        y=alt.Y('count:Q', title=None, axis=alt.Axis(labels=False, ticks=False)),
+        color=alt.Color('color:N', scale=None),  # disable Altair scale
+        tooltip=['price_bin', 'count']
+    ).properties(height=100)
+    st.altair_chart(chart, use_container_width=True)
+    # Range of resale_price
+    min_price = int(hdb_df['resale_price'].min() // bin_width * bin_width)
+    max_price = min(limit, int(hdb_df['resale_price'].max() // bin_width * bin_width) + bin_width)
+    # Streamlit slider for price range
+    highlight_range = st.slider(
+        "", 
+        label_visibility="collapsed",
+        min_value=min_price, 
+        max_value=max_price, 
+        value=(min_price, max_price), 
+        step=bin_width, 
+        format="$%d"
+    )
+    return highlight_range
+def add_lat_long(hdb_df):
+    past_prices_df = collate_past_transactions(hdb_df)
+    columns_to_remove = ['month', 'month_dt','price_bin']
+    hdb_df = hdb_df.drop(columns=columns_to_remove)
+    hdb_df = hdb_df.groupby(['town','flat_type','block', 'street_name'], as_index=False).mean()
+    hdb_df = hdb_df.round().astype({col: 'int' for col in hdb_df.select_dtypes('float').columns})
+    hdb_df = hdb_df.merge( # merging for coordinates
+        df[["block", "street_name", "lat", "lon"]],
+        on=["block", "street_name"],
+        how="left"
+    )
+    hdb_df = hdb_df.merge( # merging for past transactions
+        past_prices_df[["flat_type","block", "street_name", "past_transactions"]],
+        on=["flat_type","block", "street_name"],
+        how="left"
+    )
+    # st.dataframe(hdb_df)
+    # Clean up those missing coordinates
+    missing_coords_df = hdb_df[hdb_df['lat'].isna() | hdb_df['lon'].isna()]
+    hdb_df = hdb_df.dropna(subset=['lat', 'lon'])
+    return(hdb_df,missing_coords_df)
+def colour_nodes(hdb_df, min_price, med_price):
+    hdb_df["norm_price"] = (hdb_df["resale_price"] - min_price) / med_price
+    hdb_df["highlight"] = hdb_df["resale_price"].between(highlight_range[0], highlight_range[1])
+    hdb_df["color"] = hdb_df["norm_price"].apply(price_to_rgb)
+    hdb_df["color"] = hdb_df["color"].apply(rgb_str_to_pydeck_color)
+def offset_coords(hdb_df):
+    # Step 1: Map each (block, street_name) to room_types
+    block_street_to_types = (
+        hdb_df.groupby(['block', 'street_name'])['flat_type']
+        .unique()
+    )
+    # Step 2: Create a mapping of (block, street_name, flat_type) → offset
+    offsets = {}
+    for (block, street), types in block_street_to_types.items():
+        if len(types) <= 1:
+            continue
+        for i, flat_type in enumerate(types[1:], start=1):
+            offsets[(block, street, flat_type)] = -0.000075 * i
+    # Step 3: Apply offsets using vectorized logic
+    def get_offset(row):
+        return offsets.get((row['block'], row['street_name'], row['flat_type']), 0)
+    keys = list(zip(hdb_df['block'], hdb_df['street_name'], hdb_df['flat_type']))
+    hdb_df['lat'] += pd.Series(keys).map(offsets).fillna(0).values
+    hdb_df["lease_commence_date"] = 99-(today.year-hdb_df["lease_commence_date"])
+    hdb_df['resale_price_formatted'] = hdb_df['resale_price'].astype(int).map('{:,}'.format)
+    hdb_df["past_transactions_html"] = np.vectorize(format_and_filter_transactions)(
+        hdb_df["past_transactions"], 12
+    )
+    return hdb_df
+def render_map(hdb_df):
+    columns_to_keep = ['lat', 'lon', 'color', 'resale_price_formatted', 'lease_commence_date', 'past_transactions_html', 'town', 'block', 'street_name', 'flat_type']
+    hdb_df = hdb_df.loc[hdb_df['highlight'], columns_to_keep]
     layer = pdk.Layer(
         "ScatterplotLayer",
-        data=layer_data,
+        data=hdb_df,
         get_position='[lon, lat]',
         get_radius=10,
         get_fill_color='color',
@@ -285,8 +266,33 @@ def render_map():
     </div>
     """, unsafe_allow_html=True)
 
-if len(layer_data) > 2500:
+# Get Data #############################################################################################
+hdb_df = download_resale_hdb_dataset()
+df = pd.read_csv('postal_code_latlong_all_latlong.csv')
+today = datetime.today()
+
+# Header and such
+intro() 
+# Filters Flat Type and Town
+hdb_df = filters_type_town(hdb_df) 
+
+# Set min max median
+min_price = hdb_df["resale_price"].min()
+med_price = hdb_df["resale_price"].median()
+
+# More processing
+highlight_range = filters_price_bin(hdb_df,min_price,med_price) # Filters by Price
+hdb_df,missing_coords_df = add_lat_long(hdb_df) # Adds coordinates  
+colour_nodes(hdb_df,min_price,med_price)
+hdb_df = offset_coords(hdb_df)
+st.dataframe(hdb_df)
+
+if len(hdb_df) > 2500:
     st.text("Your current filters have too much results. Please reduce your selections. ")
 else:
     with st.spinner("Loading map... Please wait"):
-        render_map()
+        render_map(hdb_df)
+
+if not missing_coords_df.empty:
+    st.text("Transactions for the following new blocks are new and are missing coordinate data. They will not show up on the map. ")
+    st.dataframe(missing_coords_df)
