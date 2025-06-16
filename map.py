@@ -309,16 +309,9 @@ def offset_coords(hdb_df: pd.DataFrame):
     keys = list(zip(hdb_df["block"], hdb_df["street_name"], hdb_df["flat_type"]))
     hdb_df["lat"] += pd.Series(keys).map(offsets).fillna(0).values
     hdb_df["resale_price_formatted"] = hdb_df["resale_price"].map("{:,}".format)
-    cutoff = int(
-        (datetime.today().replace(day=1) - relativedelta(months=12)).strftime("%Y%m")
-    )
     hdb_df["past_transactions_html"] = hdb_df["past_transactions"].map(
         lambda txns: "<br>".join(
-            [
-                f"{t['month']}: ${t['resale_price']:,.0f}"
-                for t in txns
-                if int(t["month"].replace("-", "")) >= cutoff
-            ]
+            [f"{t['month']}: ${t['resale_price']:,.0f}" for t in txns]
         )
     )
     return hdb_df
