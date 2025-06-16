@@ -21,7 +21,7 @@ datasets = [  # These datasets are from 'Resale Flat Prices' https://data.gov.sg
     # "d_43f493c6c50d54243cc1eab0df142d6a",
     # "d_2d5ff9ea31397b66239f245f57751537",
     # "d_ea9ed51da2787afaf8e51f827c304208",
-    "d_8b84c4ee58e3cfc0ece0d773c8ca6abc" # you only need the latest file, since only past 12 months
+    "d_8b84c4ee58e3cfc0ece0d773c8ca6abc"  # you only need the latest file, since only past 12 months
 ]
 today = datetime.today()
 
@@ -318,6 +318,15 @@ def offset_coords(hdb_df: pd.DataFrame):
 
 
 def render_map(hdb_df: pd.DataFrame):
+    hdb_df = hdb_df.drop(
+        columns=[
+            "floor_area_sqm",
+            "resale_price",
+            "highlight",
+            "norm_price",
+            "past_transactions",
+        ]
+    )
     layer = pdk.Layer(
         "ScatterplotLayer",
         data=hdb_df,
