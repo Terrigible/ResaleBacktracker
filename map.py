@@ -16,7 +16,7 @@ from pathlib import Path
 
 # Instantiate
 current_path = Path.cwd()
-datasets = [ # These datasets are from 'Resale Flat Prices' https://data.gov.sg/collections/189/view
+datasets = [  # These datasets are from 'Resale Flat Prices' https://data.gov.sg/collections/189/view
     # "d_ebc5ab87086db484f88045b47411ebc5",
     # "d_43f493c6c50d54243cc1eab0df142d6a",
     # "d_2d5ff9ea31397b66239f245f57751537",
@@ -54,7 +54,7 @@ def download_resale_hdb_dataset():
 
 
 def price_to_rgb(x: float):
-    midpoint = 0.75  # set this to 0.66 or 0.75 as needed
+    midpoint = 0.5  # set this to 0.66 or 0.75 as needed
     if x < midpoint:
         # green to yellow
         r = int((x / midpoint) * 255)
@@ -138,7 +138,7 @@ def filters_type_town(hdb_df: pd.DataFrame):
     return hdb_df
 
 
-def filters_price_bin(hdb_df: pd.DataFrame, min_val: float, med_val: float):
+def filters_price_bin(hdb_df: pd.DataFrame):
     # Show price distribution ##############################################################################
     # Define bin width and threshold
     bin_width = 50000
@@ -164,8 +164,8 @@ def filters_price_bin(hdb_df: pd.DataFrame, min_val: float, med_val: float):
         unsafe_allow_html=True,
     )
     price_data["mid_price"] = price_data["price_bin"].apply(extract_bin_midpoint)
-    price_data["norm_price"] = (price_data["mid_price"] - min_val) / med_val
-    price_data["color"] = price_data["norm_price"].apply(price_to_rgb)
+    # price_data["norm_price"] = (price_data["mid_price"] - min_val) / med_val
+    # price_data["color"] = price_data["norm_price"].apply(price_to_rgb)
     chart = (
         alt.Chart(price_data)
         .mark_bar()
@@ -174,7 +174,7 @@ def filters_price_bin(hdb_df: pd.DataFrame, min_val: float, med_val: float):
                 "price_bin:N", sort=sorted_bins, title=None, axis=alt.Axis(labelAngle=0)
             ),
             y=alt.Y("count:Q", title=None, axis=alt.Axis(labels=False, ticks=False)),
-            color=alt.Color("color:N", scale=None),  # disable Altair scale
+            # color=alt.Color("color:N", scale=None),  # disable Altair scale
             tooltip=["price_bin", "count"],
         )
         .properties(height=100)
@@ -272,8 +272,19 @@ def add_lat_long(hdb_df: pd.DataFrame, df: pd.DataFrame):
     return (hdb_df, missing_coords_df)
 
 
-def colour_nodes(hdb_df: pd.DataFrame, min_price: float, med_price: float):
-    hdb_df["norm_price"] = (hdb_df["resale_price"] - min_price) / med_price
+def colour_nodes(
+    hdb_df: pd.DataFrame, min_price: float, med_price: float, max_price: float
+):
+    def normalize_price(price, min_price, med_price, max_price):
+        if price <= med_price:
+            return 0.5 * (price - min_price) / (med_price - min_price)
+        else:
+            return 0.5 + 0.5 * (price - med_price) / (max_price - med_price)
+
+    hdb_df["norm_price"] = hdb_df["resale_price"].apply(
+        lambda x: normalize_price(x, min_price, med_price, max_price)
+    )
+    # hdb_df["norm_price"] = (hdb_df["resale_price"] - min_price) / med_price
     hdb_df["color"] = hdb_df["norm_price"].apply(price_to_rgb)
     hdb_df["color"] = hdb_df["color"].apply(rgb_str_to_pydeck_color)
 
@@ -314,22 +325,6 @@ def offset_coords(hdb_df: pd.DataFrame):
 
 
 def render_map(hdb_df: pd.DataFrame):
-    columns_to_keep = [
-        "lat",
-        "lon",
-        "color",
-        "resale_price_formatted",
-        "lease_commence_date",
-        "past_transactions_html",
-        "town",
-        "block",
-        "street_name",
-        "flat_type",
-    ]
-    hdb_df["highlight"] = hdb_df["resale_price"].between(
-        highlight_range[0], highlight_range[1]
-    ) & hdb_df["lease_commence_date"].between(lease_range[0], lease_range[1])
-    hdb_df = hdb_df.loc[hdb_df["highlight"], columns_to_keep]
     layer = pdk.Layer(
         "ScatterplotLayer",
         data=hdb_df,
@@ -388,15 +383,22 @@ intro()
 # Filters Flat Type and Town
 hdb_df = filters_type_town(hdb_df)
 
-# Set min max median
-min_price = hdb_df["resale_price"].min()
-med_price = hdb_df["resale_price"].median()
 
 # More processing
-highlight_range = filters_price_bin(hdb_df, min_price, med_price)  # Filters by Price
+highlight_range = filters_price_bin(hdb_df)  # Filters by Price
 lease_range = filters_lease_range(hdb_df)
 hdb_df, missing_coords_df = add_lat_long(hdb_df, df)  # Adds coordinates
-colour_nodes(hdb_df, min_price, med_price)
+
+# Set min max median of current filters
+hdb_df["highlight"] = hdb_df["resale_price"].between(
+    highlight_range[0], highlight_range[1]
+) & hdb_df["lease_commence_date"].between(lease_range[0], lease_range[1])
+hdb_df = hdb_df.loc[hdb_df["highlight"]]
+min_price = hdb_df["resale_price"].min()
+med_price = hdb_df["resale_price"].median()
+max_price = hdb_df["resale_price"].max()
+
+colour_nodes(hdb_df, min_price, med_price, max_price)
 hdb_df = offset_coords(hdb_df)
 # st.dataframe(hdb_df)
 
