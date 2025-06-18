@@ -401,6 +401,6 @@ else:
 if not missing_coords_df.empty:
     st.divider()
     st.text(
-        "Transactions for the following new blocks are new and are missing coordinate data. They will not show up on the map. "
+        "Transactions for the following blocks are new and are missing coordinate data. They will not show up on the map. "
     )
     st.dataframe(missing_coords_df)
