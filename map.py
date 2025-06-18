@@ -21,7 +21,7 @@ datasets = [  # These datasets are from 'Resale Flat Prices' https://data.gov.sg
     # "d_43f493c6c50d54243cc1eab0df142d6a",
     # "d_2d5ff9ea31397b66239f245f57751537",
     # "d_ea9ed51da2787afaf8e51f827c304208",
-    "d_8b84c4ee58e3cfc0ece0d773c8ca6abc" # you only need the latest file, since only past 12 months
+    "d_8b84c4ee58e3cfc0ece0d773c8ca6abc"  # you only need the latest file, since only past 12 months
 ]
 today = datetime.today()
 
@@ -291,40 +291,28 @@ def colour_nodes(
 
 def offset_coords(hdb_df: pd.DataFrame):
     # Step 1: Map each (block, street_name) to room_types
-    block_street_to_types = hdb_df.groupby(["block", "street_name"])[
-        "flat_type"
-    ].unique()
+    offsets = hdb_df.groupby(["block", "street_name"])["flat_type"].cumcount()
     # Step 2: Create a mapping of (block, street_name, flat_type) → offset
-    offsets = {}
-    for (block, street), types in block_street_to_types.items():
-        if len(types) <= 1:
-            continue
-        for i, flat_type in enumerate(types[1:], start=1):
-            offsets[(block, street, flat_type)] = -0.000075 * i
-
-    # Step 3: Apply offsets using vectorized logic
-    def get_offset(row: pd.Series):
-        return offsets.get((row["block"], row["street_name"], row["flat_type"]), 0)
-
-    keys = list(zip(hdb_df["block"], hdb_df["street_name"], hdb_df["flat_type"]))
-    hdb_df["lat"] += pd.Series(keys).map(offsets).fillna(0).values
+    hdb_df["lat"] -= offsets.mul(0.000075)
     hdb_df["resale_price_formatted"] = hdb_df["resale_price"].map("{:,}".format)
-    cutoff = int(
-        (datetime.today().replace(day=1) - relativedelta(months=12)).strftime("%Y%m")
-    )
     hdb_df["past_transactions_html"] = hdb_df["past_transactions"].map(
         lambda txns: "<br>".join(
-            [
-                f"{t['month']}: ${t['resale_price']:,.0f}"
-                for t in txns
-                if int(t["month"].replace("-", "")) >= cutoff
-            ]
+            [f"{t['month']}: ${t['resale_price']:,.0f}" for t in txns]
         )
     )
     return hdb_df
 
 
 def render_map(hdb_df: pd.DataFrame):
+    hdb_df = hdb_df.drop(
+        columns=[
+            "floor_area_sqm",
+            "resale_price",
+            "highlight",
+            "norm_price",
+            "past_transactions",
+        ]
+    )
     layer = pdk.Layer(
         "ScatterplotLayer",
         data=hdb_df,
