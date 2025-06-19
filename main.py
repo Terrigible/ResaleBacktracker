@@ -339,7 +339,13 @@ st.divider()
 # Filters for options
 st.subheader("HDB Projection")
 flat_types = sorted(hdb_df["flat_type"].unique())
-selected_flat_type = st.selectbox("Desired Flat Type", options=flat_types, index=2)
+
+
+proj_col1, proj_col2 = st.columns(2)
+with proj_col1:
+    selected_flat_type = st.selectbox("Desired Flat Type", options=flat_types, index=2)
+with proj_col2:
+    agg_method = st.selectbox("Calculation of Average", options=["Median","Mean"], index=0)
 
 towns = sorted(hdb_df[hdb_df["flat_type"] == selected_flat_type]["town"].unique())
 selected_town = st.pills(
@@ -350,12 +356,11 @@ filtered_df = hdb_df[
 ]
 
 
-@st.cache_data
 def generate_pivot(filtered_df: pd.DataFrame):
     filtered_df = filtered_df.copy()
     filtered_df["year"] = pd.to_datetime(filtered_df["month"]).dt.year
     pivot = pd.pivot_table(
-        filtered_df, values="resale_price", index="year", columns="town", aggfunc="mean"
+        filtered_df, values="resale_price", index="year", columns="town", aggfunc=agg_method.lower()
     )
     pivot.index.name = "Year"
     return pivot.round(2)
