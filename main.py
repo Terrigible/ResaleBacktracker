@@ -290,15 +290,17 @@ if bank_bal and bank_bal_inc and cpf_bal and age > 0:
 
     pay_col1, pay_col2, pay_col3 = st.columns(3)
     latest_salary = proj_df["Salary"].iloc[-1]
+    latest_cpf = proj_df["CPF(OA) Increase"].iloc[-1]
+    monthly_repayment = msr * latest_salary
     with pay_col1:
         loan_repayment_val = st.number_input(
-            "30% of Projected Income ($)", value=msr * latest_salary, disabled=True
+            "30% of Projected Income ($)", value=monthly_repayment, disabled=True
         )
     with pay_col2:
         loan_duration = st.number_input("Loan Duration in Years", value=25)
     with pay_col3:
         loan_interest = st.number_input(
-            "Loan Interest Rate", value=3.00, step=0.01, format="%.2f"
+            "Loan Interest Rate (%)", value=3.00, step=0.01, format="%.2f"
         )
     loan = calc_loan_based_on_msr_salary(
         loan_repayment_val, loan_interest, loan_duration
@@ -310,8 +312,8 @@ if bank_bal and bank_bal_inc and cpf_bal and age > 0:
     max_property = bank_usage + cpf_usage + loan + expected_grants
     if bank_usage > 0 or cpf_usage > 0:
         st.success(f"You can afford a property up to ${max_property:,.2f}. ")
-        breakdown = {
-            "Source": ["Bank", "CPF(O/A)", "Loan", "Grant(s)", "Total"],
+        breakdown1 = {
+            "Funding Details": ["Bank", "CPF(O/A)", "Loan", "Grant(s)", "Total"],
             "Amount": [
                 f"${bank_usage:,.2f}",
                 f"${cpf_usage:,.2f}",
@@ -320,8 +322,22 @@ if bank_bal and bank_bal_inc and cpf_bal and age > 0:
                 f"${max_property:,.2f}",
             ],
         }
-        breakdown_df = pd.DataFrame(breakdown)
-        st.table(breakdown_df.set_index("Source"))
+        breakdown2 = {
+            "Mortgage Details": ["Monthly Mortgage via CPF","Monthly Mortgage via Cash",f"Total Repayment ({loan_duration} Years x 12 Months)"],
+            "Amount": [
+                f"${latest_cpf:,.2f}",
+                f"${monthly_repayment-latest_cpf:,.2f}",
+                f"${monthly_repayment*12*loan_duration:,.2f}",
+            ],
+        }
+        st.markdown(
+        "<label style='font-weight: 500; font-size: 0.875rem;'>Breakdown of Financing</label>",
+        unsafe_allow_html=True,
+        )
+        breakdown1_df = pd.DataFrame(breakdown1)        
+        breakdown2_df = pd.DataFrame(breakdown2)
+        st.table(breakdown1_df.set_index("Funding Details"))
+        st.table(breakdown2_df.set_index("Mortgage Details"))
     st.info(
         "Please refer to [CPF Housing Grant for Singles](https://www.hdb.gov.sg/residential/buying-a-flat/understanding-your-eligibility-and-housing-loan-options/flat-and-grant-eligibility/singles/cpf-housing-grant-for-resale-flats-singles) "
         "and [CPF Housing Grants for Families](https://www.hdb.gov.sg/residential/buying-a-flat/understanding-your-eligibility-and-housing-loan-options/flat-and-grant-eligibility/couples-and-families/cpf-housing-grants-for-resale-flats-families) "
